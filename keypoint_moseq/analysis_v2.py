@@ -352,117 +352,13 @@ def compute_moseq_df(project_dir,
 #     return moseq_df
 
 
-# def compute_stats_df(
-#     project_dir,
-#     model_name,
-#     moseq_df,
-#     min_frequency=0.005,
-#     groupby=["group", "name"],
-#     fps=30,
-# ):
-#     """Summary statistics for syllable frequencies and kinematic values.
-
-#     Parameters
-#     ----------
-#     moseq_df : pandas.DataFrame
-#         the dataframe that contains kinematic data for each frame
-#     threshold : float, optional
-#         usge threshold for the syllable to be included, by default 0.005
-#     groupby : list, optional
-#         the list of column names to group by, by default ['group', 'name']
-#     fps : int, optional
-#         frame per second information of the recording, by default 30
-
-#     Returns
-#     -------
-#     stats_df : pandas.DataFrame
-#         the summary statistics dataframe for syllable frequencies and kinematic values
-#     """
-#     # compute runlength encoding for syllables
-
-#     # load model results
-#     results_dict = load_results(project_dir, model_name)
-#     syllables = {k: res["syllable"] for k, res in results_dict.items()}
-#     # frequencies is array of frequencies for sorted syllables [syll_0, syll_1...]
-#     frequencies = get_frequencies(syllables)
-#     syll_include = np.where(frequencies > min_frequency)[0]
-
-#     # add group information
-#     # load index file
-#     index_filepath = os.path.join(project_dir, "index.csv")
-#     if os.path.exists(index_filepath):
-#         index_df = pd.read_csv(index_filepath, index_col=False)
-#     else:
-#         print(
-#             "index.csv not found, if you want to include group information for each video, please run the Assign Groups widget first"
-#         )
-
-#     # construct frequency dataframe
-#     # syllable frequencies within one session add up to 1
-#     frequency_df = []
-#     for k, v in results_dict.items():
-#         syll_freq = get_frequencies(v["syllable"])
-#         df = pd.DataFrame(
-#             {
-#                 "name": k,
-#                 "group": index_df[index_df["name"] == k]["group"].values[0],
-#                 "syllable": np.arange(len(syll_freq)),
-#                 "frequency": syll_freq,
-#             }
-#         )
-#         frequency_df.append(df)
-#     frequency_df = pd.concat(frequency_df)
-#     if "name" not in groupby:
-#         frequency_df.drop(columns=["name"], inplace=True)
-
-#     # filter out syllables that are used less than threshold in all recordings
-#     filtered_df = moseq_df[moseq_df["syllable"].isin(syll_include)].copy()
-
-#     # TODO: hard-coded heading for now, could add other scalars
-#     features = filtered_df.groupby(groupby + ["syllable"])[
-#         ["heading", "angular_velocity", "velocity_px_s"]
-#     ].agg(["mean", "std", "min", "max"])
-
-#     features.columns = ["_".join(col).strip() for col in features.columns.values]
-#     features.reset_index(inplace=True)
-
-#     # get durations
-#     trials = filtered_df["onset"].cumsum()
-#     trials.name = "trials"
-#     durations = filtered_df.groupby(groupby + ["syllable"] + [trials])["onset"].count()
-#     # average duration in seconds
-#     # durations = durations.groupby(groupby + ["syllable"]).mean() / fps
-#     durations = durations.groupby(groupby + ["syllable"]).mean()
-#     durations.name = "duration"
-#     # only keep the columns we need
-#     durations = durations.fillna(0).reset_index()[groupby + ["syllable", "duration"]]
-    
-#     occupancies = filtered_df.groupby(groupby + ["syllable"]).size()
-#     total_frames_per_animal = filtered_df.groupby(groupby)["syllable"].size()
-#     occupancies = occupancies / total_frames_per_animal  # Normalize by the number of frames per animal
-#     occupancies.name = "occupancy"  
-#     occupancies = occupancies.reset_index()[groupby + ["syllable", "occupancy"]]
-    
-#     persistence = filtered_df.groupby(groupby + ["syllable"] + [trials])["onset"].count()
-#     persistence = persistence.groupby(groupby + ["syllable"]).median() 
-#     # persistence = persistence.groupby(groupby + ["syllable"]).median() / fps
-#     persistence.name = "persistence"
-#     persistence = persistence.fillna(0).reset_index()[groupby + ["syllable", "persistence"]]
-
-#     stats_df = pd.merge(features, frequency_df, on=groupby + ["syllable"])
-#     stats_df = pd.merge(stats_df, durations, on=groupby + ["syllable"])
-#     stats_df = pd.merge(stats_df, occupancies, on=groupby + ["syllable"], how="left")
-#     stats_df = pd.merge(stats_df, persistence, on=groupby + ["syllable"], how="left")
-#     return stats_df
-
-
 def compute_stats_df(
     project_dir,
     model_name,
     moseq_df,
     min_frequency=0.005,
+    groupby=["group", "name"],
     fps=30,
-    num_factors=1, 
 ):
     """Summary statistics for syllable frequencies and kinematic values.
 
@@ -471,48 +367,74 @@ def compute_stats_df(
     moseq_df : pandas.DataFrame
         the dataframe that contains kinematic data for each frame
     threshold : float, optional
-        usage threshold for the syllable to be included, by default 0.005
+        usge threshold for the syllable to be included, by default 0.005
+    groupby : list, optional
+        the list of column names to group by, by default ['group', 'name']
     fps : int, optional
         frame per second information of the recording, by default 30
-    num_factors : int, optional
-        number of grouping factors, by default 1
 
     Returns
     -------
     stats_df : pandas.DataFrame
         the summary statistics dataframe for syllable frequencies and kinematic values
     """
-    groupby = ["name"] + [f"group{i}" for i in range(1, num_factors + 1)]
+    # compute runlength encoding for syllables
+
+    # load model results
     results_dict = load_results(project_dir, model_name)
     syllables = {k: res["syllable"] for k, res in results_dict.items()}
+    # frequencies is array of frequencies for sorted syllables [syll_0, syll_1...]
     frequencies = get_frequencies(syllables)
     syll_include = np.where(frequencies > min_frequency)[0]
+
+    # add group information
+    # load index file
     index_filepath = os.path.join(project_dir, "index.csv")
-    index_df = pd.read_csv(index_filepath, index_col=False) if os.path.exists(index_filepath) else None
+    if os.path.exists(index_filepath):
+        index_df = pd.read_csv(index_filepath, index_col=False)
+    else:
+        print(
+            "index.csv not found, if you want to include group information for each video, please run the Assign Groups widget first"
+        )
+
+    # construct frequency dataframe
+    # syllable frequencies within one session add up to 1
     frequency_df = []
     for k, v in results_dict.items():
         syll_freq = get_frequencies(v["syllable"])
-        df = {"name": k, "syllable": np.arange(len(syll_freq)), "frequency": syll_freq}
-        for i in range(1, num_factors + 1):
-            factor_col = f"group{i}"
-            if index_df is not None and factor_col in index_df.columns and k in index_df["name"].values:
-                df[factor_col] = index_df.loc[index_df["name"] == k, factor_col].values[0]
-            else:
-                df[factor_col] = "default"
-        frequency_df.append(pd.DataFrame(df))
-    
-    frequency_df = pd.concat(frequency_df, ignore_index=True)
-    
+        df = pd.DataFrame(
+            {
+                "name": k,
+                "group": index_df[index_df["name"] == k]["group"].values[0],
+                "syllable": np.arange(len(syll_freq)),
+                "frequency": syll_freq,
+            }
+        )
+        frequency_df.append(df)
+    frequency_df = pd.concat(frequency_df)
+    if "name" not in groupby:
+        frequency_df.drop(columns=["name"], inplace=True)
+
+    # filter out syllables that are used less than threshold in all recordings
     filtered_df = moseq_df[moseq_df["syllable"].isin(syll_include)].copy()
-    features = filtered_df.groupby(groupby + ["syllable"])[["heading", "angular_velocity", "velocity_px_s"]].agg(["mean", "std", "min", "max"])
+
+    # TODO: hard-coded heading for now, could add other scalars
+    features = filtered_df.groupby(groupby + ["syllable"])[
+        ["heading", "angular_velocity", "velocity_px_s"]
+    ].agg(["mean", "std", "min", "max"])
+
     features.columns = ["_".join(col).strip() for col in features.columns.values]
     features.reset_index(inplace=True)
-    
+
+    # get durations
     trials = filtered_df["onset"].cumsum()
+    trials.name = "trials"
     durations = filtered_df.groupby(groupby + ["syllable"] + [trials])["onset"].count()
+    # average duration in seconds
     # durations = durations.groupby(groupby + ["syllable"]).mean() / fps
     durations = durations.groupby(groupby + ["syllable"]).mean()
     durations.name = "duration"
+    # only keep the columns we need
     durations = durations.fillna(0).reset_index()[groupby + ["syllable", "duration"]]
     
     occupancies = filtered_df.groupby(groupby + ["syllable"]).size()
@@ -526,13 +448,91 @@ def compute_stats_df(
     # persistence = persistence.groupby(groupby + ["syllable"]).median() / fps
     persistence.name = "persistence"
     persistence = persistence.fillna(0).reset_index()[groupby + ["syllable", "persistence"]]
-    
-    stats_df = pd.merge(features, frequency_df, on=groupby + ["syllable"], how="left")
-    stats_df = pd.merge(stats_df, durations, on=groupby + ["syllable"], how="left")
+
+    stats_df = pd.merge(features, frequency_df, on=groupby + ["syllable"])
+    stats_df = pd.merge(stats_df, durations, on=groupby + ["syllable"])
     stats_df = pd.merge(stats_df, occupancies, on=groupby + ["syllable"], how="left")
     stats_df = pd.merge(stats_df, persistence, on=groupby + ["syllable"], how="left")
-
     return stats_df
+
+
+# def compute_stats_df(
+#     project_dir,
+#     model_name,
+#     moseq_df,
+#     min_frequency=0.005,
+#     fps=30,
+#     num_factors=1, 
+# ):
+#     """Summary statistics for syllable frequencies and kinematic values.
+
+#     Parameters
+#     ----------
+#     moseq_df : pandas.DataFrame
+#         the dataframe that contains kinematic data for each frame
+#     threshold : float, optional
+#         usage threshold for the syllable to be included, by default 0.005
+#     fps : int, optional
+#         frame per second information of the recording, by default 30
+#     num_factors : int, optional
+#         number of grouping factors, by default 1
+
+#     Returns
+#     -------
+#     stats_df : pandas.DataFrame
+#         the summary statistics dataframe for syllable frequencies and kinematic values
+#     """
+#     groupby = ["name"] + [f"group{i}" for i in range(1, num_factors + 1)]
+#     results_dict = load_results(project_dir, model_name)
+#     syllables = {k: res["syllable"] for k, res in results_dict.items()}
+#     frequencies = get_frequencies(syllables)
+#     syll_include = np.where(frequencies > min_frequency)[0]
+#     index_filepath = os.path.join(project_dir, "index.csv")
+#     index_df = pd.read_csv(index_filepath, index_col=False) if os.path.exists(index_filepath) else None
+#     frequency_df = []
+#     for k, v in results_dict.items():
+#         syll_freq = get_frequencies(v["syllable"])
+#         df = {"name": k, "syllable": np.arange(len(syll_freq)), "frequency": syll_freq}
+#         for i in range(1, num_factors + 1):
+#             factor_col = f"group{i}"
+#             if index_df is not None and factor_col in index_df.columns and k in index_df["name"].values:
+#                 df[factor_col] = index_df.loc[index_df["name"] == k, factor_col].values[0]
+#             else:
+#                 df[factor_col] = "default"
+#         frequency_df.append(pd.DataFrame(df))
+    
+#     frequency_df = pd.concat(frequency_df, ignore_index=True)
+    
+#     filtered_df = moseq_df[moseq_df["syllable"].isin(syll_include)].copy()
+#     features = filtered_df.groupby(groupby + ["syllable"])[["heading", "angular_velocity", "velocity_px_s"]].agg(["mean", "std", "min", "max"])
+#     features.columns = ["_".join(col).strip() for col in features.columns.values]
+#     features.reset_index(inplace=True)
+    
+#     trials = filtered_df["onset"].cumsum()
+#     durations = filtered_df.groupby(groupby + ["syllable"] + [trials])["onset"].count()
+#     # durations = durations.groupby(groupby + ["syllable"]).mean() / fps
+#     durations = durations.groupby(groupby + ["syllable"]).mean()
+#     durations.name = "duration"
+#     durations = durations.fillna(0).reset_index()[groupby + ["syllable", "duration"]]
+    
+#     occupancies = filtered_df.groupby(groupby + ["syllable"]).size()
+#     total_frames_per_animal = filtered_df.groupby(groupby)["syllable"].size()
+#     occupancies = occupancies / total_frames_per_animal  # Normalize by the number of frames per animal
+#     occupancies.name = "occupancy"  
+#     occupancies = occupancies.reset_index()[groupby + ["syllable", "occupancy"]]
+    
+#     persistence = filtered_df.groupby(groupby + ["syllable"] + [trials])["onset"].count()
+#     persistence = persistence.groupby(groupby + ["syllable"]).median() 
+#     # persistence = persistence.groupby(groupby + ["syllable"]).median() / fps
+#     persistence.name = "persistence"
+#     persistence = persistence.fillna(0).reset_index()[groupby + ["syllable", "persistence"]]
+    
+#     stats_df = pd.merge(features, frequency_df, on=groupby + ["syllable"], how="left")
+#     stats_df = pd.merge(stats_df, durations, on=groupby + ["syllable"], how="left")
+#     stats_df = pd.merge(stats_df, occupancies, on=groupby + ["syllable"], how="left")
+#     stats_df = pd.merge(stats_df, persistence, on=groupby + ["syllable"], how="left")
+
+#     return stats_df
 
 
 def generate_syll_info(project_dir, model_name, syll_info_path):
@@ -2198,8 +2198,6 @@ def plot_transition_graph_group(
     # save the figure
     plot_name = "transition_graphs"
     save_analysis_figure(fig, plot_name, project_dir, model_name, save_dir)
-
-
 
 def plot_transition_graph_difference(
     project_dir,
