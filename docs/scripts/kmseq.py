@@ -1,12 +1,12 @@
 
 import keypoint_moseq as kpms
 
-project_dir = '/home/vteruel/anna/kpms/kpms_projects/kpms-3cham-wanhui/'
+project_dir = '/home/ateruels@neuro.uni-bremen.de/Nextcloud/multianimal_rats_pose_estimation/kpms'
 config = lambda: kpms.load_config(project_dir)
-keypoint_data_path = '/home/vteruel/anna/kpms/kpms_projects/kpms-3cham-wanhui/dlc/'
+kp_data_path = '/home/ateruels@neuro.uni-bremen.de/Nextcloud/multianimal_rats_pose_estimation/kpms/data'
 
 ###### Load data
-coordinates, confidences, bodyparts = kpms.load_keypoints(keypoint_data_path, 'deeplabcut') 
+coordinates, confidences, bodyparts = kpms.load_keypoints(kp_data_path, 'sleap') 
 data, metadata = kpms.format_data(coordinates, confidences, **config()) 
 
 ###### Fit PCA
